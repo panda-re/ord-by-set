@@ -94,6 +94,7 @@
 //! [zero-sized type]: https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts
 #![no_std]
 use core::cmp::Ordering;
+use core::fmt::Debug;
 use core::ops::Range;
 
 extern crate alloc;
@@ -101,12 +102,19 @@ use alloc::vec::Vec;
 
 /// A multi-set backed by a sorted list of items while allowing for a custom
 /// ordering scheme.
+#[derive(Clone, Hash)]
 pub struct OrdBySet<T, Orderer = FullOrd>
 where
     Orderer: Order<T>,
 {
     storage: Vec<T>,
     orderer: Orderer,
+}
+
+impl<T: Debug, Orderer: Order<T>> Debug for OrdBySet<T, Orderer> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        self.storage.fmt(f)
+    }
 }
 
 impl<T, Orderer: Order<T> + Default> Default for OrdBySet<T, Orderer> {
