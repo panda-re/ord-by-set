@@ -73,6 +73,7 @@
 //! ```
 //! # use ord_by_set::{OrdBySet, Order};
 //! # use std::cmp::Ordering;
+//! #[derive(Default)]
 //! struct EverythingEqual;
 //!
 //! impl<T> Order<T> for EverythingEqual {
@@ -81,7 +82,9 @@
 //!     }
 //! }
 //!
-//! let set: OrdBySet<i32, EverythingEqual> = OrdBySet::new().with_items([3, 5, 2, 7]);
+//! type AllEqualSet = OrdBySet<i32, EverythingEqual>;
+//!
+//! let mut set = AllEqualSet::new().with_items([3, 5, 2, 7]);
 //!
 //! assert_eq!(set.count(&30), 4);
 //! set.remove_all(&0);
@@ -295,6 +298,35 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
     /// Checks if there are any items inside the set
     pub fn is_empty(&self) -> bool {
         self.storage.is_empty()
+    }
+
+    fn range_to_index_range(&self, low: &T, high: &T) -> Option<Range<usize>> {
+        if !self.orderer.order_of(low, high).is_lt() {
+            return None;
+        }
+
+        let start = self
+            .storage
+            .partition_point(|probe| self.orderer.order_of(probe, low).is_lt());
+
+        let len = self.storage[start..]
+            .partition_point(|probe| self.orderer.order_of(probe, high).is_le());
+
+        let end = start + len;
+
+        (end > start).then(|| start..end)
+    }
+
+    /// Gets a slice of all elements inclusively between two bounds
+    pub fn range(&self, low: &T, high: &T) -> Option<&[T]> {
+        self.range_to_index_range(low, high)
+            .map(|range| &self.storage[range])
+    }
+
+    /// Gets a mutable slice of all elements between two bounds
+    pub fn range_mut(&mut self, low: &T, high: &T) -> Option<SliceGuard<'_, T, Orderer>> {
+        self.range_to_index_range(low, high)
+            .map(|range| SliceGuard(self, range))
     }
 }
 

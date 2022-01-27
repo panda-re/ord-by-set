@@ -31,3 +31,17 @@ fn index_range_unsorted() {
         Some(3..5)
     );
 }
+
+#[test]
+fn slice_range_unsorted() {
+    assert_eq!(
+        OrdBySet::fully_ordered()
+            .with_items([2, 1, 3, 1, 3, 4])
+            .range(&2, &4)
+            .unwrap()
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        [2, 3, 3, 4]
+    );
+}
