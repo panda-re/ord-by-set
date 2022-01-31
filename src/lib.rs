@@ -200,6 +200,15 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
         }
     }
 
+    /// Removes the first value from the set where the orderer determines the value is
+    /// equal to the provided item. Returns the item if it is removed.
+    pub fn remove_first(&mut self, item: &T) -> Option<T> {
+        let location_range = self.get_index_range_of(item)?;
+        let contains_item = !location_range.is_empty();
+
+        contains_item.then(|| self.storage.remove(location_range.start))
+    }
+
     /// Removes all equivelant values from the set, returning all the items which
     /// were found to be equal and removed.
     pub fn drain(&mut self, item: &T) -> Vec<T> {
@@ -220,30 +229,42 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
     /// Get a slice of all equivelant items. No sorting order within is guaranteed.
     ///
     /// Returns `None` if no matching items were found in the set.
-    pub fn get<'a>(&'a self, item: &T) -> Option<&'a [T]> {
+    pub fn get(&self, item: &T) -> Option<&[T]> {
         Some(&self.storage[self.get_index_range_of(item)?])
     }
 
     /// Get the first item in the set found while binary searching for a given equivelant
     /// no guarantee is found that the item is the first in contiguous memory, rather,
     /// this finds the quickest item to be found.
-    pub fn get_first<'a>(&'a self, item: &T) -> Option<&'a T> {
+    pub fn get_first(&self, item: &T) -> Option<&T> {
         let index = self
             .storage
             .binary_search_by(|x| self.orderer.order_of(&x, item))
             .ok()?;
 
-        Some(&self.storage[index])
+        self.storage.get(index)
     }
 
     /// Get a slice of all equivelant items. No sorting order within is guaranteed
     ///
     /// **Note:** the state of the `OrdBySet` is unspecified if this `SliceGuard` is
     /// not dropped via `mem::forget`.
-    pub fn get_mut<'a>(&'a mut self, item: &T) -> Option<SliceGuard<'a, T, Orderer>> {
+    pub fn get_mut(&mut self, item: &T) -> Option<SliceGuard<'_, T, Orderer>> {
         let range = self.get_index_range_of(item)?;
 
         Some(SliceGuard(self, range))
+    }
+
+    /// Get a mutable reference to the first item in the set found while binary searching
+    /// for a given equivelant no guarantee is found that the item is the first in
+    /// contiguous memory, rather, this finds the quickest item to be found.
+    pub fn get_first_mut(&mut self, item: &T) -> Option<&mut T> {
+        let index = self
+            .storage
+            .binary_search_by(|x| self.orderer.order_of(&x, item))
+            .ok()?;
+
+        self.storage.get_mut(index)
     }
 
     /// Check if an equivelant item is contained in the set
@@ -335,6 +356,46 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
     pub fn range_mut(&mut self, low: &T, high: &T) -> Option<SliceGuard<'_, T, Orderer>> {
         self.range_to_index_range(low, high)
             .map(|range| SliceGuard(self, range))
+    }
+}
+
+impl<T, Orderer: Order<T>> OrdBySet<T, Orderer>
+where
+    T: PartialEq,
+{
+    /// Searches for a specific item (based on `PartialEq`) and removes it, returning it
+    /// if it exists.
+    ///
+    /// If multiple exist, the first found is removed.
+    pub fn remove_specific(&mut self, val: &T) -> Option<T> {
+        let location_range = self.get_index_range_of(val)?;
+        let start = location_range.start;
+        let index = self.storage[location_range].iter().position(|x| x == val)? + start;
+
+        Some(self.storage.remove(index))
+    }
+
+    /// Searches for a specific item (based on `PartialEq`) and returns a reference to it.
+    ///
+    /// If multiple exist, the first found is returned.
+    pub fn get_specific(&self, val: &T) -> Option<&T> {
+        let location_range = self.get_index_range_of(val)?;
+        let start = location_range.start;
+        let index = self.storage[location_range].iter().position(|x| x == val)? + start;
+
+        self.storage.get(index)
+    }
+
+    /// Searches for a specific item (based on `PartialEq`) and returns a mutable
+    /// reference to the value.
+    ///
+    /// If multiple exist, the first found is returned.
+    pub fn get_specific_mut(&mut self, val: &T) -> Option<&mut T> {
+        let location_range = self.get_index_range_of(val)?;
+        let start = location_range.start;
+        let index = self.storage[location_range].iter().position(|x| x == val)? + start;
+
+        self.storage.get_mut(index)
     }
 }
 
@@ -466,9 +527,9 @@ where
 
 /// A drop guard that ensures the [`OrdBySet`] is properly sorted after any modifications
 /// to the underlying slice are made
-pub struct SliceGuard<'a, T, Orderer: Order<T>>(&'a mut OrdBySet<T, Orderer>, Range<usize>);
+pub struct SliceGuard<'set, T, Orderer: Order<T>>(&'set mut OrdBySet<T, Orderer>, Range<usize>);
 
-impl<'a, T, Orderer: Order<T>> core::ops::Deref for SliceGuard<'a, T, Orderer> {
+impl<'set, T, Orderer: Order<T>> core::ops::Deref for SliceGuard<'set, T, Orderer> {
     type Target = [T];
 
     fn deref(&self) -> &Self::Target {
@@ -476,13 +537,13 @@ impl<'a, T, Orderer: Order<T>> core::ops::Deref for SliceGuard<'a, T, Orderer> {
     }
 }
 
-impl<'a, T, Orderer: Order<T>> core::ops::DerefMut for SliceGuard<'a, T, Orderer> {
+impl<'set, T, Orderer: Order<T>> core::ops::DerefMut for SliceGuard<'set, T, Orderer> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0.storage[self.1.clone()]
     }
 }
 
-impl<'a, T, Orderer: Order<T>> Drop for SliceGuard<'a, T, Orderer> {
+impl<'set, T, Orderer: Order<T>> Drop for SliceGuard<'set, T, Orderer> {
     fn drop(&mut self) {
         self.0.orderer.sort_slice(&mut self.0.storage);
     }
