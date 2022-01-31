@@ -93,12 +93,24 @@
 //!
 //! [zero-sized type]: https://doc.rust-lang.org/nomicon/exotic-sizes.html#zero-sized-types-zsts
 #![no_std]
-use core::cmp::Ordering;
-use core::fmt::Debug;
 use core::ops::Range;
 
 extern crate alloc;
 use alloc::vec::Vec;
+
+mod mut_ref_guard;
+mod order;
+mod slice_guard;
+mod trait_impls;
+
+pub use {
+    mut_ref_guard::MutRefGuard,
+    order::{FullOrd, Order},
+    slice_guard::SliceGuard,
+};
+
+#[cfg(test)]
+mod tests;
 
 /// A multi-set backed by a sorted list of items while allowing for a custom
 /// ordering scheme.
@@ -109,21 +121,6 @@ where
 {
     storage: Vec<T>,
     orderer: Orderer,
-}
-
-impl<T: Debug, Orderer: Order<T>> Debug for OrdBySet<T, Orderer> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        self.storage.fmt(f)
-    }
-}
-
-impl<T, Orderer: Order<T> + Default> Default for OrdBySet<T, Orderer> {
-    fn default() -> Self {
-        Self {
-            storage: Vec::default(),
-            orderer: Orderer::default(),
-        }
-    }
 }
 
 impl<T, Orderer: Order<T> + Default> OrdBySet<T, Orderer> {
@@ -247,8 +244,8 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
 
     /// Get a slice of all equivelant items. No sorting order within is guaranteed
     ///
-    /// **Note:** the state of the `OrdBySet` is unspecified if this `SliceGuard` is
-    /// not dropped via `mem::forget`.
+    /// **Note:** the state of the `OrdBySet` is unspecified if this [`SliceGuard`] is
+    /// not dropped, such as via `mem::forget`.
     pub fn get_mut(&mut self, item: &T) -> Option<SliceGuard<'_, T, Orderer>> {
         let range = self.get_index_range_of(item)?;
 
@@ -258,13 +255,16 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
     /// Get a mutable reference to the first item in the set found while binary searching
     /// for a given equivelant no guarantee is found that the item is the first in
     /// contiguous memory, rather, this finds the quickest item to be found.
-    pub fn get_first_mut(&mut self, item: &T) -> Option<&mut T> {
+    ///
+    /// **Note:** the state of the `OrdBySet` is unspecified if this [`MutRefGuard`] is
+    /// not dropped, such as via `mem::forget`.
+    pub fn get_first_mut(&mut self, item: &T) -> Option<MutRefGuard<'_, T, Orderer>> {
         let index = self
             .storage
             .binary_search_by(|x| self.orderer.order_of(&x, item))
             .ok()?;
 
-        self.storage.get_mut(index)
+        Some(MutRefGuard(self, index))
     }
 
     /// Check if an equivelant item is contained in the set
@@ -390,164 +390,11 @@ where
     /// reference to the value.
     ///
     /// If multiple exist, the first found is returned.
-    pub fn get_specific_mut(&mut self, val: &T) -> Option<&mut T> {
+    pub fn get_specific_mut(&mut self, val: &T) -> Option<MutRefGuard<'_, T, Orderer>> {
         let location_range = self.get_index_range_of(val)?;
         let start = location_range.start;
         let index = self.storage[location_range].iter().position(|x| x == val)? + start;
 
-        self.storage.get_mut(index)
+        Some(MutRefGuard(self, index))
     }
 }
-
-impl<T, Orderer: Order<T>> IntoIterator for OrdBySet<T, Orderer> {
-    type IntoIter = alloc::vec::IntoIter<T>;
-    type Item = T;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.storage.into_iter()
-    }
-}
-
-impl<T, Orderer: Order<T> + Default> From<Vec<T>> for OrdBySet<T, Orderer> {
-    fn from(mut storage: Vec<T>) -> Self {
-        let orderer = Orderer::default();
-
-        storage.sort_by(|left, right| orderer.order_of(&left, &right));
-
-        Self { storage, orderer }
-    }
-}
-
-impl<T, Orderer: Order<T> + Default> FromIterator<T> for OrdBySet<T, Orderer> {
-    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        Self::from(iter.into_iter().collect::<Vec<_>>())
-    }
-}
-
-/// An ordering implementation that just defers to [`Ord`]
-#[derive(Default)]
-pub struct FullOrd;
-
-/// A trait representing the capability of taking two items and ordering them.
-///
-/// An orderer *is* allowed to have two "equal" values which are not actually equal,
-/// but can be considered loosely equal. This is similar to javascript's `==` operator,
-/// while [`Ord`] would be equivelant to javascript's `===` operator.
-///
-/// For example, if you had an enum which allowed both strings and numbers:
-///
-/// ```
-/// enum Val {
-///     String(String),
-///     Num(i32),
-/// }
-/// ```
-///
-/// You *could* allow `Val::String("3")` to be loosely equivelant to `Val::Num(3)`, while still
-/// having them be distinct values. Then if the following operation is performed:
-///
-/// ```
-/// # enum Val {
-/// #     String(String),
-/// #     Num(i32),
-/// # }
-/// #
-/// use ord_by_set::{OrdBySet, Order};
-/// use std::cmp::Ordering;
-///
-/// #[derive(Default)]
-/// struct LooseOrder;
-///
-/// impl Order<Val> for LooseOrder {
-///     fn order_of(&self, left: &Val, right: &Val) -> Ordering {
-///         match (left, right) {
-///             (Val::String(left), Val::String(right)) => left.cmp(right),
-///             (Val::Num(left), Val::Num(right)) => left.cmp(right),
-///
-///             (Val::String(left), Val::Num(right)) => left.parse::<i32>()
-///                 .unwrap()
-///                 .cmp(right),
-///             (Val::Num(left), Val::String(right)) => left.cmp(&right.parse::<i32>().unwrap()),
-///         }
-///     }
-/// }
-///
-/// let totally_numbers = [
-///     Val::Num(100),
-///     Val::String("70".into()),
-///     Val::Num(70),
-///     Val::String("30".into()),
-/// ];
-/// let ord = OrdBySet::new_with_order(LooseOrder).with_items(totally_numbers);
-///
-/// assert!(matches!(
-///     ord.get(&Val::Num(70)),
-///     Some([Val::Num(70), Val::String(num)] | [Val::String(num), Val::Num(70)])
-///         if num == "70"
-/// ));
-/// ```
-///
-/// ### Specification
-///
-/// The following behaviors must hold true in a proper `Order<T>` implementation:
-///
-/// * Exactly one of `a < b`, `a > b`, or `a == b` is true.
-/// * LessThan, Equals, and GreaterThan are all transitive. Which is to say that
-/// `a == b` and `b == c` implies `a == c`.
-///
-/// The easiest way to think about this is that `Order<T>` is a proper implementation of
-/// [`Ord`] for a subset of the type `T`, albeit with possibly alternate behavior to that
-/// of T's [`Ord`] itself, if such an implementation exists.
-///
-/// Failure to uphold this contract will result in unspecified (albeit safe/sound in the
-/// context of Rust's safety guarantees) behavior by [`OrdBySet`].
-pub trait Order<T> {
-    fn order_of(&self, left: &T, right: &T) -> Ordering;
-
-    /// Takes a slice of items and sorts them using the given order
-    fn sort_slice(&self, items: &mut [T]) {
-        items.sort_by(|left, right| self.order_of(&left, &right));
-    }
-}
-
-impl<T: Ord> Order<T> for FullOrd {
-    fn order_of(&self, left: &T, right: &T) -> Ordering {
-        left.cmp(right)
-    }
-}
-
-impl<T, OrderFn> Order<T> for OrderFn
-where
-    OrderFn: Fn(&T, &T) -> Ordering,
-{
-    fn order_of(&self, left: &T, right: &T) -> Ordering {
-        self(left, right)
-    }
-}
-
-/// A drop guard that ensures the [`OrdBySet`] is properly sorted after any modifications
-/// to the underlying slice are made
-pub struct SliceGuard<'set, T, Orderer: Order<T>>(&'set mut OrdBySet<T, Orderer>, Range<usize>);
-
-impl<'set, T, Orderer: Order<T>> core::ops::Deref for SliceGuard<'set, T, Orderer> {
-    type Target = [T];
-
-    fn deref(&self) -> &Self::Target {
-        &self.0.storage[self.1.clone()]
-    }
-}
-
-impl<'set, T, Orderer: Order<T>> core::ops::DerefMut for SliceGuard<'set, T, Orderer> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0.storage[self.1.clone()]
-    }
-}
-
-impl<'set, T, Orderer: Order<T>> Drop for SliceGuard<'set, T, Orderer> {
-    fn drop(&mut self) {
-        self.0.orderer.sort_slice(&mut self.0.storage);
-    }
-}
-
-#[cfg(test)]
-mod tests;
