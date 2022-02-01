@@ -367,6 +367,10 @@ where
     /// if it exists.
     ///
     /// If multiple exist, the first found is removed.
+    ///
+    /// **Note:** this method assumes that the equality of `Orderer` is a superset of
+    /// `PartialEq`. That is to say that if `x == y` (`PartialEq`), then
+    /// `orderer.order_of(&x, &y)` must return `Ordering::Equal`.
     pub fn remove_specific(&mut self, val: &T) -> Option<T> {
         let location_range = self.get_index_range_of(val)?;
         let start = location_range.start;
@@ -378,6 +382,10 @@ where
     /// Searches for a specific item (based on `PartialEq`) and returns a reference to it.
     ///
     /// If multiple exist, the first found is returned.
+    ///
+    /// **Note:** this method assumes that the equality of `Orderer` is a superset of
+    /// `PartialEq`. That is to say that if `x == y` (`PartialEq`), then
+    /// `orderer.order_of(&x, &y)` must return `Ordering::Equal`.
     pub fn get_specific(&self, val: &T) -> Option<&T> {
         let location_range = self.get_index_range_of(val)?;
         let start = location_range.start;
@@ -386,15 +394,32 @@ where
         self.storage.get(index)
     }
 
-    /// Searches for a specific item (based on `PartialEq`) and returns a mutable
+    /// Searches for a specific item (based on [`PartialEq`]) and returns a mutable
     /// reference to the value.
     ///
     /// If multiple exist, the first found is returned.
+    ///
+    /// **Note:** this method assumes that the equality of `Orderer` is a superset of
+    /// `PartialEq`. That is to say that if `x == y` (`PartialEq`), then
+    /// `orderer.order_of(&x, &y)` must return `Ordering::Equal`.
     pub fn get_specific_mut(&mut self, val: &T) -> Option<MutRefGuard<'_, T, Orderer>> {
         let location_range = self.get_index_range_of(val)?;
         let start = location_range.start;
         let index = self.storage[location_range].iter().position(|x| x == val)? + start;
 
         Some(MutRefGuard(self, index))
+    }
+
+    /// Returns `true` if a specific item (based on [`PartialEq`]) exists in the set.
+    ///
+    /// **Note:** this method assumes that the equality of `Orderer` is a superset of
+    /// `PartialEq`. That is to say that if `x == y` (`PartialEq`), then
+    /// `orderer.order_of(&x, &y)` must return `Ordering::Equal`.
+    pub fn contains_specific(&self, val: &T) -> bool {
+        if let Some(location_range) = self.get_index_range_of(val) {
+            self.storage[location_range].iter().any(|x| x == val)
+        } else {
+            false
+        }
     }
 }

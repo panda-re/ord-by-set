@@ -73,7 +73,18 @@ use core::cmp::Ordering;
 ///
 /// Failure to uphold this contract will result in unspecified (albeit safe/sound in the
 /// context of Rust's safety guarantees) behavior by [`OrdBySet`].
+///
+/// While not strictly required for a valid `Order` implementation, if you wish to use
+/// the `*_specific` methods in `OrdBySet<T>`, then it is expected that the set of
+/// comparison pairs (left, right) will return `Ordering::Equal` for all values of
+/// `left` and `right` where `PartialEq::eq(left, right)` returns `true`.
+///
+/// That is to say, the set of comparison pairs which are equivelant under `Order<T>`
+/// should be a superset of those equal under `PartialEq` if you choose to use those
+/// methods.
 pub trait Order<T> {
+    /// Takes two items and compares them, returning if the first is less than, equal to,
+    /// or greater than, the latter.
     fn order_of(&self, left: &T, right: &T) -> Ordering;
 
     /// Takes a slice of items and sorts them using the given order
