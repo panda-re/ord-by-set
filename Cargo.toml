@@ -1,6 +1,6 @@
 [package]
 name = "ord-by-set"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2018"
 authors = ["Jordan McLeod <Jordan.McLeod@ll.mit.edu>"]
 description = "A library for working with QEMU qcow images"
@@ -10,3 +10,4 @@ license = "MIT"
 keywords = ["set", "no_std", "multiset", "bag", "collection"]
 categories = ["algorithms", "no-std", "data-structures"]
 readme = "README.md"
+documentation = "https://docs.rs/ord-by-set"

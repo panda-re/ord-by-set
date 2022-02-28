@@ -1,5 +1,9 @@
 # ord-by-set
 
+[![docs.rs/ord-by-set](https://docs.rs/ord-by-set/badge.svg)](https://docs.rs/ord-by-set)
+[![crates.io](https://img.shields.io/crates/v/ord-by-set.svg)](https://crates.io/crates/ord-by-set)
+![100% documented](https://img.shields.io/badge/docs-100%25-blueviolet)
+
 A library providing a weakly ordered multi-set with compile-time configurable
 ordering scheme.
 
