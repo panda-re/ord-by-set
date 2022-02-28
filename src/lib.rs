@@ -355,7 +355,7 @@ impl<T, Orderer: Order<T>> OrdBySet<T, Orderer> {
     /// Gets a mutable slice of all elements between two bounds
     pub fn range_mut(&mut self, low: &T, high: &T) -> Option<SliceGuard<'_, T, Orderer>> {
         self.range_to_index_range(low, high)
-            .map(|range| SliceGuard(self, range))
+            .map(move |range| SliceGuard(self, range))
     }
 }
 

@@ -1,6 +1,7 @@
 use crate::{OrdBySet, Order};
 use alloc::vec::Vec;
 use core::fmt::Debug;
+use core::iter::FromIterator;
 
 impl<T, Orderer: Order<T>> IntoIterator for OrdBySet<T, Orderer> {
     type IntoIter = alloc::vec::IntoIter<T>;

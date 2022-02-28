@@ -1,8 +1,12 @@
 [package]
 name = "ord-by-set"
-version = "0.1.0"
-edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
+version = "1.0.0"
+edition = "2018"
+authors = ["Jordan McLeod <Jordan.McLeod@ll.mit.edu>"]
+description = "A library for working with QEMU qcow images"
+homepage = "https://panda.re"
+repository = "https://github.com/panda-re/ord-by-set"
+license = "MIT"
+keywords = ["set", "no_std", "multiset", "bag", "collection"]
+categories = ["algorithms", "no-std", "data-structures"]
+readme = "README.md"
