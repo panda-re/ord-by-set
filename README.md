@@ -27,11 +27,8 @@ and a user-provided orderer. An orderer is a value which can take two items and
 loosely compare them. This is done via the `Order<T>` trait, which requires a
 single method, `Order::order_of`:
 
-```
-# use std::cmp::Ordering;
-# trait Order<T> {
+```rust
 fn order_of(&self, left: &T, right: &T) -> Ordering;
-# }
 ```
 
 Unlike `Ord`, however, this is not guaranteed to be [totally ordered], and as
@@ -50,7 +47,7 @@ For more info on this see `Order`'s docs.
 
 ### Example
 
-```
+```rust
 use ord_by_set::OrdBySet;
 
 // Our orderer will be a simple function that sorts based on the first 5 characters
@@ -71,9 +68,10 @@ While the above uses a closure for the orderer, it can be any type if you implem
 `Order<T>`. Typically this is done via a [zero-sized type] as usually state is not
 needed by the ordering mechanism, just behavior:
 
-```
-# use ord_by_set::{OrdBySet, Order};
-# use std::cmp::Ordering;
+```rust
+use ord_by_set::{OrdBySet, Order};
+use std::cmp::Ordering;
+
 #[derive(Default)]
 struct EverythingEqual;
 
