@@ -1,9 +1,9 @@
 [package]
 name = "ord-by-set"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2018"
 authors = ["Jordan McLeod <Jordan.McLeod@ll.mit.edu>"]
-description = "A library for working with QEMU qcow images"
+description = "A library providing a weakly ordered multi-set with compile-time configurable ordering scheme"
 homepage = "https://panda.re"
 repository = "https://github.com/panda-re/ord-by-set"
 license = "MIT"
